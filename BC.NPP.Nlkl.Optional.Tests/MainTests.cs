@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
 using Optional.Linq;
-
+using FluentAssertions;
 
 namespace BC.NPP.Nlkl.Optional.Tests
 {
@@ -54,10 +54,11 @@ namespace BC.NPP.Nlkl.Optional.Tests
                 .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
                 .Returns(Task.FromResult("result"));
 
-            //Ack
-            await StartPayment(new StartPaymentRequest());
+            //Act
+            var result = await StartPayment(new StartPaymentRequest());
 
             //Assert
+            result.Should().BeOfType<OkResult>();
 
         }
 

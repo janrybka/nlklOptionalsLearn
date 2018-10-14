@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
-
+using FluentAssertions;
 
 namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
 {
@@ -51,11 +51,11 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
                 .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
                 .Returns(Task.FromResult("result"));
 
-            //Ack
-            await StartPayment(new StartPaymentRequest());
+            //Act
+            var result = await StartPayment(new StartPaymentRequest());
 
             //Assert
-
+            result.Should().BeOfType<OkResult>();
         }
 
         ///TODO: 
