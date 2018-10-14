@@ -1,17 +1,15 @@
 ﻿using Moq;
 using NUnit.Framework;
-using Optional;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Linq;
-using Optional.Linq;
 
 
-namespace BC.NPP.Nlkl.Optional.Tests
+namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
 {
     [TestFixture]
-    public class MainTests
+    public class OryginalVersionTests
     {
         private readonly Mock<IStartPaymentValidator> _startPaymentValidatorMock;
         private readonly IStartPaymentValidator _startPaymentValidator;
@@ -19,11 +17,10 @@ namespace BC.NPP.Nlkl.Optional.Tests
         private readonly IApplicationProvider _applicationProvider;
         private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
         private readonly IPaymentDomainService _paymentDomainService;
+        
+        private Func<string> GetApiKeyFromHeader;
 
-
-        private Func<Option<string>> GetApiKeyFromHeader;
-
-        public MainTests()
+        public OryginalVersionTests()
         {
             _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
             _startPaymentValidator = _startPaymentValidatorMock.Object;
@@ -44,11 +41,11 @@ namespace BC.NPP.Nlkl.Optional.Tests
                 .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
                 .Returns(true);
 
-            GetApiKeyFromHeader = () => "mockApiKey".Some();
+            GetApiKeyFromHeader = () => "mockApiKey";
 
             _applicationProviderMock
                 .Setup(v => v.GetClientApplicationCode(It.IsAny<string>()))
-                .Returns("appCode".Some());
+                .Returns("appCode");
 
             _paymentDomainServiceMock
                 .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
@@ -69,20 +66,16 @@ namespace BC.NPP.Nlkl.Optional.Tests
             if (!_startPaymentValidator.Validate(request))
                 return BadRequest();
 
-            var result = from apiKey in GetApiKeyFromHeader()
-                         from appCode in _applicationProvider.GetClientApplicationCode(apiKey)  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
-                         select appCode;
+            var apiKey = GetApiKeyFromHeader();
+            if (apiKey == null)
+                return BadRequest("API Key is missing in headers.");
 
-            //var apiKey = GetApiKeyFromHeader();
-            //if (apiKey == null)
-            //    return BadRequest("API Key is missing in headers.");
+            var appCode = _applicationProvider.GetClientApplicationCode(apiKey);
+            if (appCode == null)
+                return BadRequest("Unknown application");
 
-            //var appCode = _applicationProvider.GetClientApplicationCode(apiKey);
-            //if (appCode == null)
-            //    return BadRequest("Unknown application");
-
-            //var result = await _paymentDomainService.StartPaymentAsync(request, appCode);
-            return Ok(result.ValueOr(string.Empty));
+            var result = await _paymentDomainService.StartPaymentAsync(request, appCode);
+            return Ok(result);
         }
 
         #region utils
@@ -111,7 +104,7 @@ namespace BC.NPP.Nlkl.Optional.Tests
 
     public interface IApplicationProvider
     {
-        Option<string> GetClientApplicationCode(string apiKey);
+        string GetClientApplicationCode(string apiKey);
     }
 
     public interface IPaymentDomainService
