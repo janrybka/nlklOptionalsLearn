@@ -20,9 +20,6 @@ namespace BC.NPP.Nlkl.Optional.Tests
         private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
         private readonly IPaymentDomainService _paymentDomainService;
 
-
-        private Func<Option<string>> GetApiKeyFromHeader;
-
         public MainTests()
         {
             _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
@@ -37,86 +34,253 @@ namespace BC.NPP.Nlkl.Optional.Tests
         }
 
         [Test]
-        public async Task TestStartPayment()
+        public async Task SuccessStartPaymentFlatMap() => await SuccessStartPayment(true);
+
+        [Test]
+        public async Task SuccessStartPaymentLinq() => await SuccessStartPayment(false);
+
+        public async Task SuccessStartPayment(bool testFlatMap)
         {
             //Arrange
-            _startPaymentValidatorMock
-                .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
-                .Returns(true);
-
-            GetApiKeyFromHeader = () => "mockApiKey".Some();
-
-            _applicationProviderMock
-                .Setup(v => v.GetClientApplicationCode(It.IsAny<string>()))
-                .Returns("appCode".Some());
-
-            _paymentDomainServiceMock
-                .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
-                .Returns(Task.FromResult("result"));
+            Action setup = () =>
+            {
+                _startPaymentValidatorMock
+                    .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
+                    .Returns(new object().Some<object, FailPath>());
+            };
 
             //Act
-            var result = await StartPayment(new StartPaymentRequest());
+            var result = await TestStartPayment(testFlatMap, setup);
 
             //Assert
             result.Should().BeOfType<OkResult>();
-
         }
 
-        ///TODO: 
-        ///- Co zrobić a async? Czy zadziała?
-        ///- przyda się jeszcze zapis z FlatMap
+        [Test]
+        public async Task FailedValidatorStartPaymentFlatMap() => await FailedValidatorStartPayment(true);
+
+        [Test]
+        public async Task FailedValidatorStartPaymentLinq() => await FailedValidatorStartPayment(false);
+
+        public async Task FailedValidatorStartPayment(bool testFlatMap)
+        {
+            //Arrange
+            Action setup = () =>
+            {
+                _startPaymentValidatorMock
+                    .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
+                    .Returns(Option.None<object, FailPath>(new FailPath("validation error")));
+            };
+
+            //Act
+            var result = await TestStartPayment(testFlatMap, setup);
+
+            //Assert
+            result.Should().BeOfType<BadResult>().And.Match<BadResult>((br) => br.message == "validation error");
+        }
+
+        [Test]
+        public async Task FailedApiKeyStartPaymentFlatMap() => await FailedApiKeyStartPayment(true);
+                          
+        [Test]            
+        public async Task FailedApiKeyStartPaymentLinq() => await FailedApiKeyStartPayment(false);
+
+        public async Task FailedApiKeyStartPayment(bool testFlatMap)
+        {
+            //Arrange
+            Action setup = () =>
+            {
+                GetApiKeyFromHeader = () => Option.None<string, FailPath>(new FailPath("apikey error"));
+            };
+
+            //Act
+            var result = await TestStartPayment(testFlatMap, setup);
+
+            //Assert
+            result.Should().BeOfType<BadResult>().And.Match<BadResult>((br) => br.message == "apikey error");
+        }
+
+
+        [Test]
+        public async Task FailedAppProviderStartPaymentFlatMap() => await FailedAppProviderStartPayment(true);
+
+        [Test]
+        public async Task FailedAppProviderStartPaymentLinq() => await FailedAppProviderStartPayment(false);
+
+        public async Task FailedAppProviderStartPayment(bool testFlatMap)
+        {
+            //Arrange
+            Action setup = () =>
+            {
+                _applicationProviderMock
+                    .Setup(v => v.GetClientApplicationCode(It.IsAny<string>()))
+                    .Returns(Option.None<string, FailPath>(new FailPath("AppProvider error")));
+            };
+
+            //Act
+            var result = await TestStartPayment(testFlatMap, setup);
+
+            //Assert
+            result.Should().BeOfType<BadResult>().And.Match<BadResult>((br) => br.message == "AppProvider error");
+        }
+
+        [Test]
+        public async Task FailedPayServiceStartPaymentFlatMap() => await FailedPayServiceStartPayment(true);
+
+        [Test]
+        public async Task FailedPayServiceStartPaymentLinq() => await FailedPayServiceStartPayment(false);
+
+        public async Task FailedPayServiceStartPayment(bool testFlatMap)
+        {
+            //Arrange
+            Action setup = () =>
+            {
+                _paymentDomainServiceMock
+                    .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
+                    .Returns(Task.Delay(100).ContinueWith((t) => Option.None<string, FailPath>(new FailPath("PayService error"))));
+            };
+
+            //Act
+            var result = await TestStartPayment(testFlatMap, setup);
+
+            //Assert
+            result.Should().BeOfType<BadResult>().And.Match<BadResult>((br) => br.message == "PayService error");
+        }
+
+        public async Task<IActionResult> TestStartPayment(bool testFlatMap, Action setup)
+        {
+            _startPaymentValidatorMock
+                .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
+                .Returns(new object().Some<object, FailPath>());
+
+            GetApiKeyFromHeader = () => "mockApiKey".Some<string, FailPath>();
+
+            _applicationProviderMock
+                .Setup(v => v.GetClientApplicationCode(It.IsAny<string>()))
+                .Returns("appCode".Some<string, FailPath>());
+
+            _paymentDomainServiceMock
+                .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
+                .Returns(Task.Delay(100).ContinueWith((t) => "result".Some<string, FailPath>()));
+
+            setup();
+
+            return testFlatMap ? await StartPaymentFlatMap(new StartPaymentRequest()) : await StartPayment(new StartPaymentRequest());
+        }
+
         public async Task<IActionResult> StartPayment(StartPaymentRequest request)
         {
-            if (!_startPaymentValidator.Validate(request))
-                return BadRequest();
+            var appCodeOpt = from validation in _startPaymentValidator.Validate(request)
+                          from apiKey in GetApiKeyFromHeader()
+                          from appC in _applicationProvider.GetClientApplicationCode(apiKey)  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
+                          select appC;
 
-            var result = from apiKey in GetApiKeyFromHeader()
-                         from appCode in _applicationProvider.GetClientApplicationCode(apiKey)  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
-                         select appCode;
+            // Przymusowe rozpakowanie:
 
-            //var apiKey = GetApiKeyFromHeader();
-            //if (apiKey == null)
-            //    return BadRequest("API Key is missing in headers.");
+            if (!appCodeOpt.HasValue)
+            {
+                var ex = "";
+                appCodeOpt.MapException((fp) => ex = fp.Errors);
+                return BadRequest(ex);
+            }
 
-            //var appCode = _applicationProvider.GetClientApplicationCode(apiKey);
-            //if (appCode == null)
-            //    return BadRequest("Unknown application");
+            var appCode = "";
+            appCodeOpt.MatchSome(aco => appCode = aco);
 
-            //var result = await _paymentDomainService.StartPaymentAsync(request, appCode);
-            return Ok(result.ValueOr(string.Empty));
+            // Koniec - tutaj już można użyć async-await
+
+            var startUrl = await _paymentDomainService.StartPaymentAsync(request, appCode);
+
+            IActionResult result = startUrl.Match(
+                some: (sUrl) => Ok(sUrl),
+                none: (fp) => BadRequest(fp.Errors)
+            );
+
+            return result;
+        }
+               
+        public async Task<IActionResult> StartPaymentFlatMap(StartPaymentRequest request)
+        {
+            var validation = _startPaymentValidator.Validate(request);
+            var apiKey = validation.FlatMap((_) => GetApiKeyFromHeader());
+            var appCodeOpt = apiKey.FlatMap(ak => _applicationProvider.GetClientApplicationCode(ak));  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
+
+            // Przymusowe rozpakowanie:
+
+            if (!appCodeOpt.HasValue)
+            {
+                var ex = "";
+                appCodeOpt.MapException((fp) => ex = fp.Errors);
+                return BadRequest(ex);
+            }
+
+            var appCode = "";
+            appCodeOpt.MatchSome(aco => appCode = aco);
+
+            // Koniec - tutaj już można użyć async-await
+
+            var startUrl = await _paymentDomainService.StartPaymentAsync(request, appCode);
+
+            IActionResult result = startUrl.Match(
+                some: (sUrl) => Ok(sUrl),
+                none: (fp) => BadRequest(fp.Errors)
+            );
+
+            return result;
         }
 
-        #region utils
+        #region Dependencies
+
+        private Func<Option<string, FailPath>> GetApiKeyFromHeader;
+
+        public class StartPaymentRequest { }
+
+        public interface IStartPaymentValidator
+        {
+            Option<object, FailPath> Validate(StartPaymentRequest request);
+        }
+
+        public interface IApplicationProvider
+        {
+            Option<string, FailPath> GetClientApplicationCode(string apiKey);
+        }
+
+        public interface IPaymentDomainService
+        {
+            Task<Option<string, FailPath>> StartPaymentAsync(StartPaymentRequest request, string appCode);
+        }
+
         private IActionResult BadRequest(string message = "")
         {
-            return new BadResult();
+            return new BadResult(message);
         }
 
         private IActionResult Ok(string result)
         {
             return new OkResult();
         }
+
+        public class FailPath
+        {
+            public string Errors;
+
+            public FailPath(string errors)
+            {
+                this.Errors = errors;
+            }
+        }
+
+        public interface IActionResult { }
+        public class BadResult : IActionResult {
+            public readonly string message;
+
+            public BadResult(string message)
+            {
+                this.message = message;
+            }
+        }
+        public class OkResult : IActionResult { }
+
         #endregion
-    }
-
-    public interface IActionResult { }
-    public class BadResult : IActionResult { }
-    public class OkResult : IActionResult { }
-
-    public class StartPaymentRequest { }
-
-    public interface IStartPaymentValidator
-    {
-        bool Validate(StartPaymentRequest request);
-    }
-
-    public interface IApplicationProvider
-    {
-        Option<string> GetClientApplicationCode(string apiKey);
-    }
-
-    public interface IPaymentDomainService
-    {
-        Task<string> StartPaymentAsync(StartPaymentRequest request, string appCode);
     }
 }

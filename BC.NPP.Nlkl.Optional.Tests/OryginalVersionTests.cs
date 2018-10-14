@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using System.Linq;
 using FluentAssertions;
 
-namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
+namespace BC.NPP.Nlkl.Optional.Tests
 {
     [TestFixture]
     public class OryginalVersionTests
@@ -39,7 +39,7 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
             //Arrange
             _startPaymentValidatorMock
                 .Setup(v => v.Validate(It.IsAny<StartPaymentRequest>()))
-                .Returns(true);
+                .Returns(new ValidationResult.Success());
 
             GetApiKeyFromHeader = () => "mockApiKey";
 
@@ -49,7 +49,7 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
 
             _paymentDomainServiceMock
                 .Setup(v => v.StartPaymentAsync(It.IsAny<StartPaymentRequest>(), It.IsAny<string>()))
-                .Returns(Task.FromResult("result"));
+                .Returns(Task.Delay(100).ContinueWith((t) => "result"));
 
             //Act
             var result = await StartPayment(new StartPaymentRequest());
@@ -63,8 +63,9 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
         ///- przyda się jeszcze zapis z FlatMap
         public async Task<IActionResult> StartPayment(StartPaymentRequest request)
         {
-            if (!_startPaymentValidator.Validate(request))
-                return BadRequest();
+            var validation = _startPaymentValidator.Validate(request);
+            if (!validation.IsValid)
+                return BadRequest((validation as ValidationResult.Failure).Errors);
 
             var apiKey = GetApiKeyFromHeader();
             if (apiKey == null)
@@ -78,7 +79,7 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
             return Ok(result);
         }
 
-        #region utils
+        #region Dependencies
         private IActionResult BadRequest(string message = "")
         {
             return new BadResult();
@@ -88,27 +89,53 @@ namespace BC.NPP.Nlkl.Optional.OrgVer.Tests
         {
             return new OkResult();
         }
+
+        public interface IActionResult { }
+        public class BadResult : IActionResult { }
+        public class OkResult : IActionResult { }
+
+        public class StartPaymentRequest { }
+
+        public interface IStartPaymentValidator
+        {
+            ValidationResult Validate(StartPaymentRequest request);
+        }
+
+        public interface IApplicationProvider
+        {
+            string GetClientApplicationCode(string apiKey);
+        }
+
+        public interface IPaymentDomainService
+        {
+            Task<string> StartPaymentAsync(StartPaymentRequest request, string appCode);
+        }
+
+        public class ValidationResult
+        {
+            public bool IsValid;
+
+            protected ValidationResult() { }
+
+            public class Success : ValidationResult
+            {
+                public Success()
+                {
+                    IsValid = true;
+                }
+            }
+
+            public class Failure : ValidationResult
+            {
+                public string Errors;
+
+                public Failure()
+                {
+                    IsValid = false;
+                }
+            }
+        }
+
         #endregion
-    }
-
-    public interface IActionResult { }
-    public class BadResult : IActionResult { }
-    public class OkResult : IActionResult { }
-
-    public class StartPaymentRequest { }
-
-    public interface IStartPaymentValidator
-    {
-        bool Validate(StartPaymentRequest request);
-    }
-
-    public interface IApplicationProvider
-    {
-        string GetClientApplicationCode(string apiKey);
-    }
-
-    public interface IPaymentDomainService
-    {
-        Task<string> StartPaymentAsync(StartPaymentRequest request, string appCode);
     }
 }
