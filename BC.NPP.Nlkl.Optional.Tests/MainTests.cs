@@ -13,25 +13,7 @@ namespace BC.NPP.Nlkl.Optional.Tests
     [TestFixture]
     public class MainTests
     {
-        private readonly Mock<IStartPaymentValidator> _startPaymentValidatorMock;
-        private readonly IStartPaymentValidator _startPaymentValidator;
-        private readonly Mock<IApplicationProvider> _applicationProviderMock;
-        private readonly IApplicationProvider _applicationProvider;
-        private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
-        private readonly IPaymentDomainService _paymentDomainService;
-
-        public MainTests()
-        {
-            _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
-            _startPaymentValidator = _startPaymentValidatorMock.Object;
-
-            _applicationProviderMock = new Mock<IApplicationProvider>();
-            _applicationProvider = _applicationProviderMock.Object;
-
-
-            _paymentDomainServiceMock = new Mock<IPaymentDomainService>();
-            _paymentDomainService = _paymentDomainServiceMock.Object;
-        }
+        #region Tests
 
         [Test]
         public async Task SuccessStartPaymentFlatMap() => await SuccessStartPayment(true);
@@ -168,6 +150,8 @@ namespace BC.NPP.Nlkl.Optional.Tests
             return testFlatMap ? await StartPaymentFlatMap(new StartPaymentRequest()) : await StartPayment(new StartPaymentRequest());
         }
 
+        #endregion Tests
+
         public async Task<IActionResult> StartPayment(StartPaymentRequest request)
         {
             var appCodeOpt = from validation in _startPaymentValidator.Validate(request)
@@ -231,6 +215,26 @@ namespace BC.NPP.Nlkl.Optional.Tests
 
         #region Dependencies
 
+        private readonly Mock<IStartPaymentValidator> _startPaymentValidatorMock;
+        private readonly IStartPaymentValidator _startPaymentValidator;
+        private readonly Mock<IApplicationProvider> _applicationProviderMock;
+        private readonly IApplicationProvider _applicationProvider;
+        private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
+        private readonly IPaymentDomainService _paymentDomainService;
+
+        public MainTests()
+        {
+            _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
+            _startPaymentValidator = _startPaymentValidatorMock.Object;
+
+            _applicationProviderMock = new Mock<IApplicationProvider>();
+            _applicationProvider = _applicationProviderMock.Object;
+
+
+            _paymentDomainServiceMock = new Mock<IPaymentDomainService>();
+            _paymentDomainService = _paymentDomainServiceMock.Object;
+        }
+        
         private Func<Option<string, FailPath>> GetApiKeyFromHeader;
 
         public class StartPaymentRequest { }

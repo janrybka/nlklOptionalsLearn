@@ -11,28 +11,6 @@ namespace BC.NPP.Nlkl.Optional.Tests
     [TestFixture]
     public class OryginalVersionTests
     {
-        private readonly Mock<IStartPaymentValidator> _startPaymentValidatorMock;
-        private readonly IStartPaymentValidator _startPaymentValidator;
-        private readonly Mock<IApplicationProvider> _applicationProviderMock;
-        private readonly IApplicationProvider _applicationProvider;
-        private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
-        private readonly IPaymentDomainService _paymentDomainService;
-        
-        private Func<string> GetApiKeyFromHeader;
-
-        public OryginalVersionTests()
-        {
-            _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
-            _startPaymentValidator = _startPaymentValidatorMock.Object;
-
-            _applicationProviderMock = new Mock<IApplicationProvider>();
-            _applicationProvider = _applicationProviderMock.Object;
-
-
-            _paymentDomainServiceMock = new Mock<IPaymentDomainService>();
-            _paymentDomainService = _paymentDomainServiceMock.Object;
-        }
-
         [Test]
         public async Task TestStartPayment()
         {
@@ -58,9 +36,6 @@ namespace BC.NPP.Nlkl.Optional.Tests
             result.Should().BeOfType<OkResult>();
         }
 
-        ///TODO: 
-        ///- Co zrobić a async? Czy zadziała?
-        ///- przyda się jeszcze zapis z FlatMap
         public async Task<IActionResult> StartPayment(StartPaymentRequest request)
         {
             var validation = _startPaymentValidator.Validate(request);
@@ -80,6 +55,29 @@ namespace BC.NPP.Nlkl.Optional.Tests
         }
 
         #region Dependencies
+
+        private readonly Mock<IStartPaymentValidator> _startPaymentValidatorMock;
+        private readonly IStartPaymentValidator _startPaymentValidator;
+        private readonly Mock<IApplicationProvider> _applicationProviderMock;
+        private readonly IApplicationProvider _applicationProvider;
+        private readonly Mock<IPaymentDomainService> _paymentDomainServiceMock;
+        private readonly IPaymentDomainService _paymentDomainService;
+
+        private Func<string> GetApiKeyFromHeader;
+
+        public OryginalVersionTests()
+        {
+            _startPaymentValidatorMock = new Mock<IStartPaymentValidator>();
+            _startPaymentValidator = _startPaymentValidatorMock.Object;
+
+            _applicationProviderMock = new Mock<IApplicationProvider>();
+            _applicationProvider = _applicationProviderMock.Object;
+
+
+            _paymentDomainServiceMock = new Mock<IPaymentDomainService>();
+            _paymentDomainService = _paymentDomainServiceMock.Object;
+        }
+
         private IActionResult BadRequest(string message = "")
         {
             return new BadResult();
