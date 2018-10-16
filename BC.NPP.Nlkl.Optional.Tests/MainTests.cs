@@ -188,7 +188,7 @@ namespace BC.NPP.Nlkl.Optional.Tests
             var validationOpt = _startPaymentValidator.Validate(request);
             var apiKeyOpt = validationOpt.FlatMap((_) => GetApiKeyFromHeader());
             var appCodeOpt = apiKeyOpt.FlatMap(apiKey => _applicationProvider.GetClientApplicationCode(apiKey));  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
-            var startUrlOpt = await appCodeOpt.FlatMap(async (ac) => await _paymentDomainService.StartPaymentAsync(request, ac));
+            var startUrlOpt = await appCodeOpt.FlatMap(async (appCode) => await _paymentDomainService.StartPaymentAsync(request, appCode));
 
             return startUrlOpt.Match(
                 some: (startUrl) => Ok(startUrl),
