@@ -185,17 +185,15 @@ namespace BC.NPP.Nlkl.Optional.Tests
                
         public async Task<IActionResult> StartPaymentFlatMap(StartPaymentRequest request)
         {
-            var validation = _startPaymentValidator.Validate(request);
-            var apiKey = validation.FlatMap((_) => GetApiKeyFromHeader());
-            var appCodeOpt = apiKey.FlatMap(ak => _applicationProvider.GetClientApplicationCode(ak));  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
+            var validationOpt = _startPaymentValidator.Validate(request);
+            var apiKeyOpt = validationOpt.FlatMap((_) => GetApiKeyFromHeader());
+            var appCodeOpt = apiKeyOpt.FlatMap(apiKey => _applicationProvider.GetClientApplicationCode(apiKey));  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
             var startUrlOpt = await appCodeOpt.FlatMap(async (ac) => await _paymentDomainService.StartPaymentAsync(request, ac));
 
-            IActionResult result = startUrlOpt.Match(
+            return startUrlOpt.Match(
                 some: (startUrl) => Ok(startUrl),
                 none: (failPath) => BadRequest(failPath.Errors)
             );
-
-            return result;
         }
         
         //// Wersja na standardzie Nlkl.Optional:
