@@ -1,4 +1,4 @@
-﻿using Moq;
+using Moq;
 using NUnit.Framework;
 using Optional;
 using System;
@@ -188,30 +188,21 @@ namespace BC.NPP.Nlkl.Optional.Tests
             var validation = _startPaymentValidator.Validate(request);
             var apiKey = validation.FlatMap((_) => GetApiKeyFromHeader());
             var appCodeOpt = apiKey.FlatMap(ak => _applicationProvider.GetClientApplicationCode(ak));  // tutaj nie był dozwolony zwrot "string" musiał być "Option<string>"
+            var startUrlOpt = await appCodeOpt.FlatMap(async (ac) => await _paymentDomainService.StartPaymentAsync(request, ac));
 
-            // Przymusowe rozpakowanie:
-
-            if (!appCodeOpt.HasValue)
-            {
-                var ex = "";
-                appCodeOpt.MapException((fp) => ex = fp.Errors);
-                return BadRequest(ex);
-            }
-
-            var appCode = "";
-            appCodeOpt.MatchSome(aco => appCode = aco);
-
-            // Koniec - tutaj już można użyć async-await
-
-            var startUrl = await _paymentDomainService.StartPaymentAsync(request, appCode);
-
-            IActionResult result = startUrl.Match(
-                some: (sUrl) => Ok(sUrl),
-                none: (fp) => BadRequest(fp.Errors)
+            IActionResult result = startUrlOpt.Match(
+                some: (startUrl) => Ok(startUrl),
+                none: (failPath) => BadRequest(failPath.Errors)
             );
 
             return result;
         }
+        
+        //// Wersja na standardzie Nlkl.Optional:
+
+        //startUrlOpt = await appCodeOpt.Match(
+        //    some: async (ac) => await _paymentDomainService.StartPaymentAsync(request, ac),
+        //    none: (failPath) => Task.FromResult(Option.None<string, FailPath>(failPath)));
 
         #region Dependencies
 
@@ -263,17 +254,7 @@ namespace BC.NPP.Nlkl.Optional.Tests
         {
             return new OkResult();
         }
-
-        public class FailPath
-        {
-            public string Errors;
-
-            public FailPath(string errors)
-            {
-                this.Errors = errors;
-            }
-        }
-
+        
         public interface IActionResult { }
         public class BadResult : IActionResult {
             public readonly string message;
@@ -286,5 +267,25 @@ namespace BC.NPP.Nlkl.Optional.Tests
         public class OkResult : IActionResult { }
 
         #endregion
+    }
+
+    public class FailPath
+    {
+        public string Errors;
+
+        public FailPath(string errors)
+        {
+            this.Errors = errors;
+        }
+    }
+
+    public static class OptionalExtensions
+    {
+        public static Task<Option<T, TException>> FlatMap<T, TException>(this Option<T, TException> option, Func<T, Task<Option<T, TException>>> some)// where T: , TException: class, OptionValue: class
+        {
+            return option.Match(
+                some: async (data) => await some(data),
+                none: (failPath) => Task.FromResult(Option.None<T, TException>(failPath)));
+        }
     }
 }
